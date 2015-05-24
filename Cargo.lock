@@ -3,6 +3,7 @@ name = "qotd"
 version = "0.1.0"
 dependencies = [
  "mio 0.4.0 (git+https://github.com/carllerche/mio)",
+ "rand 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -54,6 +55,14 @@ version = "0.3.6"
 source = "git+https://github.com/carllerche/nix-rust#21fb1394a111d19079da90a4d31171b0d6adc27c"
 dependencies = [
  "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "rand"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
  "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
