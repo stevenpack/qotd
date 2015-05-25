@@ -1,7 +1,7 @@
 extern crate mio;
 extern crate rand;
 
-use mio::{EventLoop,Token,TryWrite};
+use mio::{EventLoop,Token,TryWrite, Interest, PollOpt};
 use mio::tcp::*;
 use mio::udp::*;
 use mio::buf::*;
@@ -85,10 +85,14 @@ impl mio::Handler for Pong {
                     Ok(Some(mut connection)) => {
                         println!("accepted a socket {:?}", connection);
                         let quote = self.quote_provider.get_random_quote();
-                        connection.write_slice(quote.as_bytes());
+                        match connection.write_slice(quote.as_bytes()) {
+                            Ok(x) => println!("Wrote to tcp"),
+                            Err(e) => println!("Failed to write")
+
+                        }
                     }
                     Ok(None) => {
-                        println!("the server socket wasn't actually ready");
+                        println!("the server socket wasn't actually ready")
                     }
                     Err(e) => {
                         println!("listener.accept() errored: {}", e);
@@ -98,14 +102,17 @@ impl mio::Handler for Pong {
             }
             UDP_SERVER => {
                 println!("the server socket is ready to accept a UDP connection");
-                //let mut buf = [0, ..10];
-                match self.udp_server.recv_from(buf) {
-                    Ok((amt, src)) => {
-                        // Send a reply to the socket we received data from
-                        //let buf = buf.mut_slice_to(amt);
-                        //buf.reverse();
-                        //self.udp_server.send_to(buf, src);
+                let mut buf = [0; 128];                
+                match self.udp_server.recv_from(&mut MutSliceBuf::wrap(&mut buf)) {
+                    Ok(Some(addr)) => {
+                        let mut quote = self.quote_provider.get_random_quote();
+                        let mut quote_buf = SliceBuf::wrap(&mut quote.as_bytes());
+                        match self.udp_server.send_to(&mut quote_buf, &addr) {
+                            Ok(_) => println!("Wrote to udp"),
+                            Err(e) => println!("Faile to write to udp")
+                        }
                     }
+                    Ok(None) => println!("Couldn't write to socket? Or was it just empty?"),
                     Err(e) => println!("couldn't receive a datagram: {}", e)
                 }
             }
@@ -115,7 +122,8 @@ impl mio::Handler for Pong {
 
     fn writable(&mut self, event_loop: &mut EventLoop<Pong>, token: Token) {
         match token {
-            TCP_SERVER => println!("received writable for token 0"),
+            TCP_SERVER => println!("received writable for TCP_SERVER"),
+            UDP_SERVER => println!("received writable for UDP_SERVER"),
             _ => panic!("Unexpected token")
         };
     }
@@ -129,20 +137,22 @@ fn main() {
     let address = "0.0.0.0:6567".parse().unwrap();
     let tcp_server = TcpListener::bind(&address).unwrap();
     let udp_server = UdpSocket::v4().unwrap();
-    udp_server.bind(&address);
+    let _ = udp_server.bind(&address);
 
     let mut event_loop = mio::EventLoop::new().unwrap();
-    let _ = event_loop.register(&tcp_server, TCP_SERVER);
+    let _ = event_loop.register_opt(&tcp_server, TCP_SERVER, Interest::all(), PollOpt::edge());
+    let _ = event_loop.register_opt(&udp_server, UDP_SERVER, Interest::readable(), PollOpt::edge());
 
     println!("running pingpong server");
-    let _ = event_loop.run(&mut Pong 
+    let mut pong = Pong 
     {
         tcp_server: tcp_server,
         udp_server: udp_server,
         quote_provider: quote_provider        
-    });
+    };
+    let _ = event_loop.run(&mut pong);
 
-    drop(udp_server); // close the socket
-    drop(tcp_server);
+    drop(pong.udp_server); // close the socket
+    drop(pong.tcp_server);
 
 }
