@@ -47,7 +47,7 @@ impl QuoteProviderImpl for QuoteProvider {
                 match line {
                     Ok (line_str) => {
                         if line_str.len() > 0 {
-                            quotes.push(line_str + "\r\n");
+                            quotes.push(line_str + "\n");
                         } else {
                             println!("Skipped blank line in file.");
                         }
@@ -67,17 +67,18 @@ impl QuoteProviderImpl for QuoteProvider {
 const TCP_SERVER: mio::Token = mio::Token(0);
 const UDP_SERVER: mio::Token = mio::Token(1);
 
-struct Pong {
+struct QotdServer {
     tcp_server: TcpListener,
     udp_server: UdpSocket,
     quote_provider: QuoteProvider
 }
 
-impl mio::Handler for Pong {
+impl mio::Handler for QotdServer {
     type Timeout = ();
     type Message = ();
 
-    fn readable(&mut self, event_loop: &mut mio::EventLoop<Pong>, token: mio::Token, hint: mio::ReadHint) {
+    #[allow(unused_variables)]
+    fn readable(&mut self, event_loop: &mut mio::EventLoop<QotdServer>, token: mio::Token, hint: mio::ReadHint) {
         match token {
             TCP_SERVER => {
                 println!("the server socket is ready to accept a TCP connection");
@@ -86,10 +87,12 @@ impl mio::Handler for Pong {
                         println!("accepted a socket {:?}", connection);
                         let quote = self.quote_provider.get_random_quote();
                         match connection.write_slice(quote.as_bytes()) {
-                            Ok(x) => println!("Wrote to tcp"),
-                            Err(e) => println!("Failed to write")
+                            Ok(Some(_)) => println!("Wrote to tcp"),
+                            Ok(None) => println!("Didn't write anything to tcp"),
+                            Err(e) => println!("Failed to write. {:?}", e)
 
                         }
+                        drop(connection);
                     }
                     Ok(None) => {
                         println!("the server socket wasn't actually ready")
@@ -105,11 +108,12 @@ impl mio::Handler for Pong {
                 let mut buf = [0; 128];                
                 match self.udp_server.recv_from(&mut MutSliceBuf::wrap(&mut buf)) {
                     Ok(Some(addr)) => {
-                        let mut quote = self.quote_provider.get_random_quote();
+                        let quote = self.quote_provider.get_random_quote();
                         let mut quote_buf = SliceBuf::wrap(&mut quote.as_bytes());
                         match self.udp_server.send_to(&mut quote_buf, &addr) {
-                            Ok(_) => println!("Wrote to udp"),
-                            Err(e) => println!("Faile to write to udp")
+                            Ok(Some(_)) => println!("Wrote to udp"),
+                            Ok(None) => println!("Failed to write any bytes"),
+                            Err(e) => println!("Faile to write to udp. {:?}", e)
                         }
                     }
                     Ok(None) => println!("Couldn't write to socket? Or was it just empty?"),
@@ -118,14 +122,6 @@ impl mio::Handler for Pong {
             }
             _ => panic!("Received unknown token"),
         }
-    }
-
-    fn writable(&mut self, event_loop: &mut EventLoop<Pong>, token: Token) {
-        match token {
-            TCP_SERVER => println!("received writable for TCP_SERVER"),
-            UDP_SERVER => println!("received writable for UDP_SERVER"),
-            _ => panic!("Unexpected token")
-        };
     }
 }
 
@@ -140,19 +136,19 @@ fn main() {
     let _ = udp_server.bind(&address);
 
     let mut event_loop = mio::EventLoop::new().unwrap();
-    let _ = event_loop.register_opt(&tcp_server, TCP_SERVER, Interest::all(), PollOpt::edge());
+    let _ = event_loop.register_opt(&tcp_server, TCP_SERVER, Interest::readable(), PollOpt::edge());
     let _ = event_loop.register_opt(&udp_server, UDP_SERVER, Interest::readable(), PollOpt::edge());
 
-    println!("running pingpong server");
-    let mut pong = Pong 
+    println!("running qotd server");
+    let mut qotd_server = QotdServer 
     {
         tcp_server: tcp_server,
         udp_server: udp_server,
         quote_provider: quote_provider        
     };
-    let _ = event_loop.run(&mut pong);
+    let _ = event_loop.run(&mut qotd_server);
 
-    drop(pong.udp_server); // close the socket
-    drop(pong.tcp_server);
+    drop(qotd_server.udp_server);
+    drop(qotd_server.tcp_server);
 
 }
