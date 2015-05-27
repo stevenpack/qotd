@@ -9,6 +9,19 @@ use rand::{thread_rng, Rng};
 use std::fs::File;
 use std::io::*;
 
+#[macro_export]
+macro_rules! mytry {
+    ($e:expr) => ({
+        use ::std::result::Result::{Ok, Err};
+ 
+        match $e {
+            Ok(e) => e,
+            Err(e) => return Err(e),
+        }
+    })
+}
+
+
 trait QuoteProviderImpl {
   fn get_quote(&self, usize) -> String;
   fn get_random_quote(&self) -> String;
@@ -74,24 +87,19 @@ struct QotdServer {
 }
 
 impl QotdServer {
+
     fn accept_tcp_connection(quote_provider: &QuoteProvider, tcp_listener: &TcpListener) {
         
         let stream_result = tcp_listener.accept();
         match stream_result {
             Ok(Some(mut connection)) => {
                 println!("accepted a socket {:?}", connection);
-                let quote = quote_provider.get_random_quote();
-                //try!(connection.write_slice(quote.as_bytes()));
-                let r = connection.write_slice(quote.as_bytes()) ;
-                QotdServer::log_socket_write(r);
+                let result = connection.write_slice(quote_provider.get_random_quote().as_bytes()) ;
+                QotdServer::log_socket_write(result);
                 drop(connection);
             }
-            Ok(None) => {
-                println!("the server socket wasn't actually ready")
-            }
-            Err(e) => {
-                println!("listener.accept() errored: {}", e);
-            }
+            Ok(None) => println!("The tcp socket wasn't actually ready"),        
+            Err(e) => println!("listener.accept() errored: {:?}", e)            
         }
     }
 
@@ -102,10 +110,10 @@ impl QotdServer {
             Ok(Some(addr)) => {
                 let quote = quote_provider.get_random_quote();
                 let mut quote_buf = SliceBuf::wrap(&mut quote.as_bytes());
-                let r = udp_socket.send_to(&mut quote_buf, &addr);
-                QotdServer::log_socket_write(r);
+                let result = udp_socket.send_to(&mut quote_buf, &addr);
+                QotdServer::log_socket_write(result);
             }
-            Ok(None) => println!("Couldn't write to socket? Or was it just empty?"),
+            Ok(None) => println!("The udp socket wasn't actually ready"),
             Err(e) => println!("couldn't receive a datagram: {}", e)
         }
     }
@@ -131,18 +139,6 @@ impl mio::Handler for QotdServer {
             _ => panic!("Received unknown token"),
         }
     }
-}
-
-macro_rules! vecxx {
-    ( $( $x:expr ),* ) => {
-        {
-            let mut temp_vec = Vec::new();
-            $(
-                temp_vec.push($x);
-            )*
-            temp_vec
-        }
-    };
 }
 
 fn main() {
