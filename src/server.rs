@@ -8,6 +8,7 @@ use mio::buf::*;
 use std::io::*;
 use quote_provider::*;
 
+//todo: share this from main.rs
 const TCP_SERVER: mio::Token = mio::Token(0);
 const UDP_SERVER: mio::Token = mio::Token(1);
 

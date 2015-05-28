@@ -9,8 +9,8 @@ use mio::tcp::*;
 use mio::udp::*;
 use quote_provider::*;
 
-const TCP_SERVER: mio::Token = mio::Token(0);
-const UDP_SERVER: mio::Token = mio::Token(1);
+pub const TCP_SERVER: mio::Token = mio::Token(0);
+pub const UDP_SERVER: mio::Token = mio::Token(1);
 
 #[macro_export]
 macro_rules! mytry {
@@ -25,20 +25,22 @@ macro_rules! mytry {
 }
 
 fn main() {
-    
+    println!("QOTD starting. Initializing quote provider.");
     let quote_provider: QuoteProvider = QuoteProviderImpl::new();
     println!("Sample quote: {:?}", quote_provider.get_random_quote());
+    println!("Binding sockets");
 
     let address = "0.0.0.0:6567".parse().unwrap();
     let tcp_server = TcpListener::bind(&address).unwrap();
     let udp_server = UdpSocket::v4().unwrap();
     let _ = udp_server.bind(&address);
 
+    println!("Setting up async IO");
     let mut event_loop = EventLoop::new().unwrap();
     let _ = event_loop.register_opt(&tcp_server, TCP_SERVER, Interest::readable(), PollOpt::edge());
     let _ = event_loop.register_opt(&udp_server, UDP_SERVER, Interest::readable(), PollOpt::edge());
 
-    println!("running qotd server");
+    println!("Starting server");
     let mut qotd_server = server::QotdServer 
     {
         tcp_server: tcp_server,
