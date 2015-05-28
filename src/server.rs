@@ -1,34 +1,20 @@
 extern crate mio;
-extern crate rand;
+extern crate std;
 
-mod quote_provider;
-
-use mio::{EventLoop,Token,TryWrite, Interest, PollOpt};
+use mio::{Token,TryWrite};
 use mio::tcp::*;
 use mio::udp::*;
 use mio::buf::*;
 use std::io::*;
 use quote_provider::*;
 
-#[macro_export]
-macro_rules! mytry {
-    ($e:expr) => ({
-        use ::std::result::Result::{Ok, Err};
- 
-        match $e {
-            Ok(e) => e,
-            Err(e) => return Err(e),
-        }
-    })
-}
-
 const TCP_SERVER: mio::Token = mio::Token(0);
 const UDP_SERVER: mio::Token = mio::Token(1);
 
-struct QotdServer {
-    tcp_server: TcpListener,
-    udp_server: UdpSocket,
-    quote_provider: QuoteProvider
+pub struct QotdServer {
+    pub tcp_server: TcpListener,
+    pub udp_server: UdpSocket,
+    pub quote_provider: QuoteProvider
 }
 
 impl QotdServer {
@@ -84,32 +70,4 @@ impl mio::Handler for QotdServer {
             _ => panic!("Received unknown token"),
         }
     }
-}
-
-fn main() {
-    
-    let quote_provider: QuoteProvider = QuoteProviderImpl::new();
-    println!("Sample quote: {:?}", quote_provider.get_random_quote());
-
-    let address = "0.0.0.0:6567".parse().unwrap();
-    let tcp_server = TcpListener::bind(&address).unwrap();
-    let udp_server = UdpSocket::v4().unwrap();
-    let _ = udp_server.bind(&address);
-
-    let mut event_loop = mio::EventLoop::new().unwrap();
-    let _ = event_loop.register_opt(&tcp_server, TCP_SERVER, Interest::readable(), PollOpt::edge());
-    let _ = event_loop.register_opt(&udp_server, UDP_SERVER, Interest::readable(), PollOpt::edge());
-
-    println!("running qotd server");
-    let mut qotd_server = QotdServer 
-    {
-        tcp_server: tcp_server,
-        udp_server: udp_server,
-        quote_provider: quote_provider        
-    };
-    let _ = event_loop.run(&mut qotd_server);
-
-    drop(qotd_server.udp_server);
-    drop(qotd_server.tcp_server);
-
 }
